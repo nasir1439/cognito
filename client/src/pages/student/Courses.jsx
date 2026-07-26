@@ -12,7 +12,47 @@ import { useGetPublishedCourseQuery } from "@/features/api/courseApi";
 function Courses() {
   const { data, isLoading, isError } = useGetPublishedCourseQuery();
   // console.log(data);
-  if (isError) return <h1>Some Error Occured While Fetching Courses.</h1>;
+  if (!isLoading && data?.courses?.length === 0) {
+    return (
+      <section className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="max-w-md text-center">
+          <div className="mb-6 text-6xl">📚</div>
+
+          <h2 className="text-3xl font-bold tracking-tight">
+            No Courses Available
+          </h2>
+
+          <p className="mt-3 text-muted-foreground">
+            There are no published courses at the moment. Please check back
+            later for new learning opportunities.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  if (isError) {
+    return (
+      <section className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="max-w-md text-center">
+          <div className="mb-6 text-6xl">⚠️</div>
+
+          <h2 className="text-3xl font-bold tracking-tight">
+            Something Went Wrong
+          </h2>
+
+          <p className="mt-3 text-muted-foreground">
+            We couldn't load the courses right now. Please refresh the page or
+            try again later.
+          </p>
+
+          <Button className="mt-6" onClick={() => window.location.reload()}>
+            Try Again
+          </Button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section

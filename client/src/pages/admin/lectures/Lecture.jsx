@@ -10,7 +10,7 @@ const Lecture = ({ lecture, index, courseId }) => {
   const goToUpdateLecture = () => {
     navigate(`/admin/course/${courseId}/lecture/${lecture._id}`);
   };
-
+  // console.log(lecture);
   return (
     <div className="group mt-4 relative overflow-hidden rounded-3xl border border-white/10 bg-white/10 p-5 shadow-lg backdrop-blur-2xl transition-all duration-300 hover:-translate-y-1 hover:border-indigo-500/30 hover:shadow-indigo-500/10">
       {/* Gradient Glow */}
@@ -40,10 +40,10 @@ const Lecture = ({ lecture, index, courseId }) => {
 
             {/* Dummy Meta */}
             <div className="mt-2 flex items-center gap-3 text-sm text-muted-foreground">
-              <div className="flex items-center gap-1">
+              {/* <div className="flex items-center gap-1">
                 <Clock3 className="h-4 w-4 text-violet-400" />
                 <span>12 min</span>
-              </div>
+              </div> */}
 
               <span className="h-1 w-1 rounded-full bg-muted-foreground" />
 

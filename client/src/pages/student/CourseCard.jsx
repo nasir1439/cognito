@@ -5,9 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Star, Users, Clock3, Signal, IndianRupee } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useGetCourseDetailWithStatusQuery } from "@/features/api/purchaseApi";
 
 function CourseCard({ course }) {
-  // console.log(course);
+  const courseId = course._id;
+  const { data } = useGetCourseDetailWithStatusQuery(courseId);
+  const purchased = data?.purchased;
   return (
     <Link to={`/course-detail/${course._id}`}>
       <Card className="group overflow-hidden rounded-3xl border border-border/50 bg-background/70 backdrop-blur-xl transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-indigo-500/10">
@@ -105,9 +108,15 @@ function CourseCard({ course }) {
         </CardContent>
 
         <CardFooter className="p-5 pt-0">
-          <Button className="h-11 w-full rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 text-sm font-semibold transition-all duration-300 hover:from-indigo-600 hover:to-violet-600 hover:shadow-lg hover:shadow-indigo-500/30">
-            Enroll Now
-          </Button>
+          {purchased ? (
+            <Button className="w-full rounded-2xl bg-green-500 hover:bg-green-600">
+              Continue Course
+            </Button>
+          ) : (
+            <Button className="h-11 w-full rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 text-sm font-semibold transition-all duration-300 hover:from-indigo-600 hover:to-violet-600 hover:shadow-lg hover:shadow-indigo-500/30">
+              Enroll Now
+            </Button>
+          )}
         </CardFooter>
       </Card>
     </Link>

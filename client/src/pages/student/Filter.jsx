@@ -1,4 +1,3 @@
-import React, { useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
@@ -11,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 
 const categories = [
   { id: "nextjs", label: "Next JS" },
@@ -24,29 +24,36 @@ const categories = [
   { id: "docker", label: "Docker" },
   { id: "mongodb", label: "MongoDB" },
   { id: "html", label: "HTML" },
+  { id: "react", label: "React Js" },
 ];
 
-const Filter = ({ handleFilterChange }) => {
-  const [selectedCategories, setSelectedCategories] = useState([]);
-  const [sortByPrice, setSortByPrice] = useState("");
+const Filter = ({ handleFilterChange, selectedCategories, sortByPrice }) => {
+  // const handleCategoryChange = (categoryId) => {
+  //   setSelectedCategories((prev) => {
+  //     const updatedCategories = prev.includes(categoryId)
+  //       ? prev.filter((id) => id !== categoryId)
+  //       : [...prev, categoryId];
+
+  //     handleFilterChange(updatedCategories, sortByPrice);
+
+  //     return updatedCategories;
+  //   });
+  // };
 
   const handleCategoryChange = (categoryId) => {
-    setSelectedCategories((prev) => {
-      const updatedCategories = prev.includes(categoryId)
-        ? prev.filter((id) => id !== categoryId)
-        : [...prev, categoryId];
+    const updatedCategories = selectedCategories.includes(categoryId)
+      ? selectedCategories.filter((id) => id !== categoryId)
+      : [...selectedCategories, categoryId];
 
-      handleFilterChange(updatedCategories, sortByPrice);
-
-      return updatedCategories;
-    });
+    handleFilterChange(updatedCategories, sortByPrice);
   };
-
+  // const handlePriceChange = (value) => {
+  //   setSortByPrice(value);
+  //   handleFilterChange(selectedCategories, value);
+  // };
   const handlePriceChange = (value) => {
-    setSortByPrice(value);
     handleFilterChange(selectedCategories, value);
   };
-
   return (
     <div className="w-full md:w-[280px]">
       <div className="sticky top-24 rounded-2xl border bg-card p-5 shadow-sm">
@@ -61,7 +68,11 @@ const Filter = ({ handleFilterChange }) => {
         <div>
           <Label className="font-semibold">Sort by Price</Label>
 
-          <Select onValueChange={handlePriceChange}>
+          <Select
+            key={sortByPrice}
+            value={sortByPrice}
+            onValueChange={handlePriceChange}
+          >
             <SelectTrigger className="mt-2">
               <SelectValue placeholder="Select option" />
             </SelectTrigger>
@@ -75,8 +86,14 @@ const Filter = ({ handleFilterChange }) => {
               </SelectGroup>
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            onClick={() => handleFilterChange([], "")}
+            className="mt-2 w-full"
+          >
+            Clear Filters
+          </Button>
         </div>
-
         <Separator className="my-5" />
 
         <div>
@@ -87,6 +104,7 @@ const Filter = ({ handleFilterChange }) => {
               <div key={category.id} className="flex items-center gap-3">
                 <Checkbox
                   id={category.id}
+                  checked={selectedCategories.includes(category.id)}
                   onCheckedChange={() => handleCategoryChange(category.id)}
                 />
 

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { AlertCircle } from "lucide-react";
 
@@ -30,7 +30,10 @@ const SearchPage = () => {
     setSelectedCategories(categories);
     setSortByPrice(price);
   };
-
+  useEffect(() => {
+    setSelectedCategories([]);
+    setSortByPrice("");
+  }, [query]);
   return (
     <div className="min-h-screen mt-11 bg-background">
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -51,8 +54,11 @@ const SearchPage = () => {
         </div>
 
         <div className="flex flex-col gap-8 md:flex-row">
-          <Filter handleFilterChange={handleFilterChange} />
-
+          <Filter
+            selectedCategories={selectedCategories}
+            sortByPrice={sortByPrice}
+            handleFilterChange={handleFilterChange}
+          />
           <div className="flex-1">
             {isLoading ? (
               <div className="space-y-5">
@@ -88,8 +94,8 @@ const CourseNotFound = () => {
       <h2 className="text-3xl font-bold">No Courses Found</h2>
 
       <p className="mt-3 max-w-md text-muted-foreground">
-        We couldn't find any course matching your search. Try another keyword or
-        remove some filters.
+        No courses match your current search and selected filters. Try removing
+        a filter or searching with a different keyword.
       </p>
 
       <Link to="/" className="mt-6">

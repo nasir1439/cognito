@@ -346,34 +346,29 @@ export const togglePublishCourse = async (req, res) => {
 
 export const getPublishedCourse = async (req, res) => {
   try {
-    const courses = await Course.find({
-      isPublished: true,
-    }).populate({
+    const courses = await Course.find({ isPublished: true }).populate({
       path: "creator",
       select: "name photoUrl",
     });
 
-    if (courses.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No Published Courses Found",
-      });
-    }
-
     return res.status(200).json({
       success: true,
       courses,
+      message:
+        courses.length > 0
+          ? "Published courses fetched successfully."
+          : "No published courses available.",
     });
   } catch (error) {
-    console.log(error);
+    console.error("Error fetching published courses:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Failed to Get Published Courses",
+      message: "Failed to fetch published courses.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
-
 // export const searchCourse = async (req, res) => {
 //   try {
 //     const { query = "", categories = [], sortByPrice = "" } = req.query;
@@ -453,7 +448,11 @@ export const getPublishedCourse = async (req, res) => {
 
 export const searchCourse = async (req, res) => {
   try {
-    const { query = "", categories = [], sortByPrice = "" } = req.query;
+    const { query = "", categories = "", sortByPrice = "" } = req.query;
+
+    const categoryArray = categories
+      ? categories.split(",").map((item) => item.trim())
+      : [];
     console.log(categories);
 
     // create search query
@@ -467,8 +466,8 @@ export const searchCourse = async (req, res) => {
     };
 
     // if categories selected
-    if (categories.length > 0) {
-      searchCriteria.category = { $in: categories };
+    if (categoryArray.length > 0) {
+      searchCriteria.category = { $in: categoryArray };
     }
 
     // define sorting order
