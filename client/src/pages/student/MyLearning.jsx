@@ -5,10 +5,47 @@ import CourseSkeleton from "./CourseSkeleton";
 import { useLoadUserQuery } from "@/features/api/authApi";
 
 const MyLearning = () => {
-  const { data, isLoading } = useLoadUserQuery();
-  const myLearningCourses = data?.user.enrolledCourses || [];
-  // console.log(myLearningCourses);
-  if (myLearningCourses.length === 0)
+  const { data, isLoading, isFetching, isError, refetch } = useLoadUserQuery();
+
+  const myLearningCourses = data?.user?.enrolledCourses || [];
+
+  // Loading State
+  if (isLoading || isFetching) {
+    return (
+      <section className="relative min-h-screen bg-background pt-28 pb-20">
+        <div className="mx-auto max-w-7xl px-4">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <CourseSkeleton key={index} />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Error State
+  if (isError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center text-center">
+        <h2 className="text-2xl font-bold">Something went wrong!</h2>
+
+        <p className="mt-3 text-muted-foreground">
+          Unable to load your courses. Please try again.
+        </p>
+
+        <button
+          onClick={refetch}
+          className="mt-5 rounded-lg bg-indigo-600 px-5 py-2 text-white hover:bg-indigo-700"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
+  // Empty State
+  if (myLearningCourses.length === 0) {
     return (
       <div className="flex flex-col items-center mt-30 justify-center rounded-3xl border border-dashed py-40 text-center">
         <h2 className="text-2xl font-bold">No Courses Found</h2>
@@ -18,6 +55,9 @@ const MyLearning = () => {
         </p>
       </div>
     );
+  }
+
+  // Main UI
   return (
     <section className="relative min-h-screen overflow-hidden bg-background pt-28 pb-20">
       {/* Background Gradient */}
@@ -31,6 +71,7 @@ const MyLearning = () => {
         <div className="mb-12">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background/60 px-4 py-1.5 backdrop-blur">
             <BookOpen size={16} />
+
             <span className="text-sm text-muted-foreground">
               Your Learning Journey
             </span>
@@ -51,14 +92,9 @@ const MyLearning = () => {
 
         {/* Courses */}
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {isLoading
-            ? Array.from({ length: 3 }).map((_, index) => (
-                <CourseSkeleton key={index} />
-              ))
-            : myLearningCourses &&
-              myLearningCourses.map((course) => (
-                <CourseCard key={course.id} course={course} />
-              ))}
+          {myLearningCourses.map((course) => (
+            <CourseCard key={course._id || course.id} course={course} />
+          ))}
         </div>
       </div>
     </section>

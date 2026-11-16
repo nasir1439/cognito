@@ -27,7 +27,7 @@ import {
   useGetLectureByIdQuery,
   useRemoveLectureMutation,
 } from "@/features/api/courseApi";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 const MEDIA_API = "http://localhost:8080/api/v1/media";
 const LectureTab = () => {
@@ -306,12 +306,14 @@ const LectureTab = () => {
 
           {/* Footer Buttons */}
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <Button
-              variant="outline"
-              className="h-11 rounded-2xl border-white/10 bg-white/5 px-6 backdrop-blur-xl hover:bg-white/10"
-            >
-              Cancel
-            </Button>
+            <Link to={`/admin/course/${courseId}/lecture`}>
+              <Button
+                variant="outline"
+                className="h-11 rounded-2xl border-white/10 bg-white/5 px-6 backdrop-blur-xl hover:bg-white/10"
+              >
+                Cancel
+              </Button>
+            </Link>
 
             <Button
               disabled={isLoading}

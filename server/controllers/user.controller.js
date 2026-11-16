@@ -96,7 +96,7 @@ export const logout = async (req, res) => {
 export const getUserProfile = async (req, res) => {
   try {
     const userId = req.id;
-    console.log("aagaya bhai");
+    // console.log("aagaya bhai");
     const user = await User.findById(userId)
       .select("-password")
       .populate({

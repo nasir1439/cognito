@@ -10,7 +10,7 @@ export const authApi = createApi({
     baseUrl: USER_API,
     credentials: "include",
   }),
-
+  tagTypes: ["User"],
   endpoints: (builder) => ({
     registerUser: builder.mutation({
       query: (inputData) => ({
@@ -26,6 +26,7 @@ export const authApi = createApi({
         method: "POST",
         body: inputData,
       }),
+      invalidatesTags: ["User"],
 
       async onQueryStarted(arg, { queryFulfilled, dispatch }) {
         try {
@@ -61,6 +62,8 @@ export const authApi = createApi({
         url: "profile",
         method: "GET",
       }),
+      providesTags: ["User"],
+
       async onQueryStarted(_, { queryFulfilled, dispatch }) {
         try {
           const result = await queryFulfilled;

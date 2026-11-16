@@ -142,14 +142,14 @@ function Navbar() {
 
                   <DropdownMenuGroup>
                     {user?.role === "student" && (
-                      <Link to="/my-learning" asChild>
-                        <DropdownMenuItem>My Learnings</DropdownMenuItem>
-                      </Link>
+                      <DropdownMenuItem asChild>
+                        <Link to="/my-learning">My Learnings</Link>
+                      </DropdownMenuItem>
                     )}
 
-                    <Link to="/profile" asChild>
-                      <DropdownMenuItem>Edit Profile</DropdownMenuItem>
-                    </Link>
+                    <DropdownMenuItem asChild>
+                      <Link to="/profile">Edit Profile</Link>
+                    </DropdownMenuItem>
 
                     <DropdownMenuItem onClick={logOutUserHandler}>
                       Log Out
@@ -159,9 +159,11 @@ function Navbar() {
                   {user?.role === "instructor" && (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem>
-                        <LayoutDashboard className="mr-2 h-4 w-4" />
-                        <Link to="/admin/dashboard">Dashboard</Link>
+                      <DropdownMenuItem asChild>
+                        <Link to="/admin/dashboard">
+                          <LayoutDashboard className="mr-2 h-4 w-4" />
+                          Dashboard
+                        </Link>
                       </DropdownMenuItem>
                     </>
                   )}
