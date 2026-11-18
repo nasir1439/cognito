@@ -1,13 +1,5 @@
-// mongoDB username - syednasirhussain1439_db_user
-// password - UGzpCLdDtFN8Yqio
-
-//mongodbURI - mongodb+srv://syednasirhussain1439_db_user:UGzpCLdDtFN8Yqio@cluster0.dv2fsro.mongodb.net/
-//mongoDBURI - mongodb+srv://syednasirhussain1439_db_user:UGzpCLdDtFN8Yqio@cluster0.dv2fsro.mongodb.net/
-
 import "./App.css";
-import { Button } from "@/components/ui/button";
-import Login from "./pages/login";
-import Navbar from "./components/ui/Navbar";
+import Login from "./pages/Login";
 import HeroSection from "./pages/student/HeroSection";
 import MainLayout from "./layout/MainLayout";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";

@@ -29,7 +29,7 @@ import {
 } from "@/features/api/courseApi";
 import { Link, useParams } from "react-router-dom";
 
-const MEDIA_API = "http://localhost:8080/api/v1/media";
+const MEDIA_API = `${import.meta.env.VITE_API_BASE_URL}/media`;
 const LectureTab = () => {
   //   const isLoading = false;
   const [lectureTitle, setLectureTitle] = useState("");
@@ -37,7 +37,6 @@ const LectureTab = () => {
   const [isFree, setIsFree] = useState(false);
   const [mediaProgress, setMediaProgress] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [btnDisable, setBtnDisable] = useState(true);
 
   const params = useParams();
   const { courseId, lectureId } = params;
@@ -103,7 +102,6 @@ const LectureTab = () => {
             videoUrl: res.data.data.url,
             publicId: res.data.data.public_id,
           });
-          setBtnDisable(false);
           toast.success(res.data.message);
         }
       } catch (error) {
@@ -316,7 +314,9 @@ const LectureTab = () => {
             </Link>
 
             <Button
-              disabled={isLoading}
+              disabled={
+                isLoading || mediaProgress || !uploadVideoInfo?.videoUrl
+              }
               onClick={editLectureHandler}
               className="h-11 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 px-8 font-semibold text-white transition-all duration-300 hover:from-indigo-600 hover:to-violet-600 hover:shadow-lg hover:shadow-indigo-500/30"
             >

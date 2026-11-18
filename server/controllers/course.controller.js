@@ -5,7 +5,7 @@ import {
   uploadMedia,
 } from "../utils/cloudinary.js";
 import { Lecture } from "../models/lecture.model.js";
-import { json } from "express";
+import { unlink } from "node:fs/promises";
 
 export const createCourse = async (req, res) => {
   try {
@@ -78,6 +78,12 @@ export const editCourse = async (req, res) => {
       });
     }
 
+    if (course.creator.toString() !== req.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to edit this course",
+      });
+    }
     // console.log(course.courseThumbnail);
     // delete a thumbnail from cloudinary
     let courseThumbnail;
@@ -119,6 +125,12 @@ export const editCourse = async (req, res) => {
     return res.status(500).json({
       message: "Failed to Create Course",
     });
+  } finally {
+    if (req.file?.path) {
+      await unlink(req.file.path).catch((err) => {
+        console.log("Temporary file cleanup failed:", err);
+      });
+    }
   }
 };
 
@@ -145,23 +157,69 @@ export const getCourseById = async (req, res) => {
   }
 };
 
+// old createLecture Implementation
+// export const createLecture = async (req, res) => {
+//   try {
+//     const { lectureTitle } = req.body;
+//     const { courseId } = req.params;
+//     if (!lectureTitle?.trim() || !courseId) {
+//       return res.status(400).json({
+//         message: "Lecture Title and Course Id are Required",
+//       });
+//     }
+
+//     let lecture = await Lecture.create({ lectureTitle });
+
+//     const course = await Course.findById(courseId);
+//     if (course) {
+//       course.lectures.push(lecture._id);
+//       await course.save();
+//     }
+
+//     return res.status(201).json({
+//       message: "Lecture Created Successfully",
+//       lecture,
+//     });
+//   } catch (error) {
+//     console.log(error);
+//     return res.status(500).json({
+//       message: "Failed to Create Lecture",
+//     });
+//   }
+// };
+
+// new createLecture Implementation
 export const createLecture = async (req, res) => {
   try {
     const { lectureTitle } = req.body;
     const { courseId } = req.params;
+
     if (!lectureTitle?.trim() || !courseId) {
       return res.status(400).json({
         message: "Lecture Title and Course Id are Required",
       });
     }
 
-    let lecture = await Lecture.create({ lectureTitle });
-
     const course = await Course.findById(courseId);
-    if (course) {
-      course.lectures.push(lecture._id);
-      await course.save();
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course Not Found",
+      });
     }
+
+    if (course.creator.toString() !== req.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to add lectures to this course",
+      });
+    }
+
+    const lecture = await Lecture.create({ lectureTitle });
+
+    course.lectures.push(lecture._id);
+    await course.save();
 
     return res.status(201).json({
       message: "Lecture Created Successfully",
@@ -175,22 +233,138 @@ export const createLecture = async (req, res) => {
   }
 };
 
+// old getLecture controller implementation
+// export const getLecture = async (req, res) => {
+//   try {
+//     const { courseId } = req.params;
+//     const course = await Course.findById(courseId).populate("lectures");
+//     if (!course) {
+//       return res.status(404).json({
+//         message: "Course Not found",
+//       });
+//     }
+//     // console.log(course);
+//     return res.status(200).json({
+//       lectures: course.lectures,
+//     });
+//   } catch (error) {
+//     console.log(error);
+//     return res.status(500).json({
+//       message: "Failed to Get Lectures",
+//     });
+//   }
+// };
+//old editLecture controller implementation
+// export const editLecture = async (req, res) => {
+//   try {
+//     const { lectureTitle, videoInfo, isPreviewFree } = req.body;
+
+//     const { courseId, lectureId } = req.params;
+
+//     // IMPORTANT
+//     const lecture = await Lecture.findById(lectureId);
+
+//     if (!lecture) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Lecture Not Found",
+//       });
+//     }
+
+//     // Update lecture fields
+//     if (lectureTitle) {
+//       lecture.lectureTitle = lectureTitle;
+//     }
+
+//     if (videoInfo?.videoUrl) {
+//       lecture.videoUrl = videoInfo.videoUrl;
+//     }
+
+//     if (videoInfo?.publicId) {
+//       lecture.publicId = videoInfo.publicId;
+//     }
+
+//     // BOOLEAN FIX
+//     if (isPreviewFree !== undefined) {
+//       lecture.isPreviewFree = isPreviewFree;
+//     }
+
+//     await lecture.save();
+
+//     // Ensure course contains lecture
+//     const course = await Course.findById(courseId);
+
+//     if (course && !course.lectures.includes(lecture._id)) {
+//       course.lectures.push(lecture._id);
+
+//       await course.save();
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       lecture,
+//       message: "Lecture updated successfully",
+//     });
+//   } catch (error) {
+//     console.log(error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed To Edit Lecture",
+//     });
+//   }
+// };
+
+//new (secure) editLecture controller implemantation
+
+// new getLecture controller implementation
 export const getLecture = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const course = await Course.findById(courseId).populate("lectures");
+    const userId = req.id;
+
+    // Find course without populating lectures
+    const course = await Course.findById(courseId);
+
     if (!course) {
       return res.status(404).json({
-        message: "Course Not found",
+        success: false,
+        message: "Course Not Found",
       });
     }
-    // console.log(course);
+
+    // Check whether user is the course creator
+    const isCreator = course.creator.toString() === userId;
+
+    // Check completed purchase
+    const purchase = await CoursePurchase.findOne({
+      courseId,
+      userId,
+      status: "completed",
+    });
+
+    const hasPurchased = !!purchase;
+
+    // Creator and purchased students can access all lectures
+    if (isCreator || hasPurchased) {
+      await course.populate("lectures");
+    } else {
+      // Non-purchased users can access only free preview lectures
+      await course.populate({
+        path: "lectures",
+        match: { isPreviewFree: true },
+      });
+    }
+
     return res.status(200).json({
+      success: true,
       lectures: course.lectures,
     });
   } catch (error) {
     console.log(error);
+
     return res.status(500).json({
+      success: false,
       message: "Failed to Get Lectures",
     });
   }
@@ -199,16 +373,45 @@ export const getLecture = async (req, res) => {
 export const editLecture = async (req, res) => {
   try {
     const { lectureTitle, videoInfo, isPreviewFree } = req.body;
-
     const { courseId, lectureId } = req.params;
 
-    // IMPORTANT
+    // Find course
+    const course = await Course.findById(courseId);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course Not Found",
+      });
+    }
+
+    // Verify course ownership
+    if (course.creator.toString() !== req.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to edit this course",
+      });
+    }
+
+    // Find lecture
     const lecture = await Lecture.findById(lectureId);
 
     if (!lecture) {
       return res.status(404).json({
         success: false,
         message: "Lecture Not Found",
+      });
+    }
+
+    // Verify lecture belongs to this course
+    const lectureExists = course.lectures.some(
+      (id) => id.toString() === lectureId,
+    );
+
+    if (!lectureExists) {
+      return res.status(404).json({
+        success: false,
+        message: "Lecture does not belong to this course",
       });
     }
 
@@ -225,21 +428,11 @@ export const editLecture = async (req, res) => {
       lecture.publicId = videoInfo.publicId;
     }
 
-    // BOOLEAN FIX
     if (isPreviewFree !== undefined) {
       lecture.isPreviewFree = isPreviewFree;
     }
 
     await lecture.save();
-
-    // Ensure course contains lecture
-    const course = await Course.findById(courseId);
-
-    if (course && !course.lectures.includes(lecture._id)) {
-      course.lectures.push(lecture._id);
-
-      await course.save();
-    }
 
     return res.status(200).json({
       success: true,
@@ -256,18 +449,82 @@ export const editLecture = async (req, res) => {
   }
 };
 
+//old removeLecture implementation
+// export const removeLecture = async (req, res) => {
+//   try {
+//     const { lectureId } = req.params;
+//     // console.log(lectureId);
+//     // Find & delete lecture
+//     const lecture = await Lecture.findByIdAndDelete(lectureId);
+
+//     if (!lecture) {
+//       return res.status(404).json({
+//         message: "Lecture Not Found",
+//       });
+//     }
+
+//     // Delete video from Cloudinary
+//     if (lecture.publicId) {
+//       await deleteVideoFromCloudinary(lecture.publicId);
+//     }
+
+//     // Remove lecture reference from course
+//     await Course.updateOne(
+//       { lectures: lecture._id },
+//       { $pull: { lectures: lecture._id } },
+//     );
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Lecture Removed Successfully",
+//     });
+//   } catch (error) {
+//     console.log(error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed To Remove Lecture",
+//     });
+//   }
+// };
+
+// new removeLectureImplementation
 export const removeLecture = async (req, res) => {
   try {
     const { lectureId } = req.params;
-    // console.log(lectureId);
-    // Find & delete lecture
-    const lecture = await Lecture.findByIdAndDelete(lectureId);
+
+    // Find the course containing this lecture
+    const course = await Course.findOne({
+      lectures: lectureId,
+    });
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course Not Found",
+      });
+    }
+
+    // Verify course ownership
+    if (course.creator.toString() !== req.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to delete this lecture",
+      });
+    }
+
+    // Find lecture
+    const lecture = await Lecture.findById(lectureId);
 
     if (!lecture) {
       return res.status(404).json({
+        success: false,
         message: "Lecture Not Found",
       });
     }
+
+    // Delete lecture
+    await Lecture.findByIdAndDelete(lectureId);
 
     // Delete video from Cloudinary
     if (lecture.publicId) {
@@ -276,7 +533,7 @@ export const removeLecture = async (req, res) => {
 
     // Remove lecture reference from course
     await Course.updateOne(
-      { lectures: lecture._id },
+      { _id: course._id },
       { $pull: { lectures: lecture._id } },
     );
 
@@ -294,34 +551,104 @@ export const removeLecture = async (req, res) => {
   }
 };
 
+// old getLectureById controller implementation
+// export const getLectureById = async (req, res) => {
+//   try {
+//     const { lectureId } = req.params;
+//     const lecture = await Lecture.findById(lectureId);
+//     if (!lecture) {
+//       return res.status(404).json({
+//         message: "Lecture not found",
+//       });
+//     }
+//     return res.status(200).json({
+//       lecture,
+//     });
+//   } catch (error) {
+//     console.log(error);
+//     return res.status(500).json({ message: "Failed to get Lectures by id" });
+//   }
+// };
+
+//publish and Unpublish Course Logic
+
+// new getLectureById controller implementation
 export const getLectureById = async (req, res) => {
   try {
     const { lectureId } = req.params;
-    const lecture = await Lecture.findById(lectureId);
-    if (!lecture) {
+    const userId = req.id;
+
+    // Find course containing this lecture
+    const course = await Course.findOne({
+      lectures: lectureId,
+    });
+
+    if (!course) {
       return res.status(404).json({
-        message: "Lecture not found",
+        success: false,
+        message: "Course or Lecture Not Found",
       });
     }
+
+    // Check whether user is the course creator
+    const isCreator = course.creator.toString() === userId;
+
+    // Check completed purchase
+    const purchase = await CoursePurchase.findOne({
+      courseId: course._id,
+      userId,
+      status: "completed",
+    });
+
+    const hasPurchased = !!purchase;
+
+    // Fetch lecture only after authorization checks
+    const lecture = await Lecture.findById(lectureId);
+
+    if (!lecture) {
+      return res.status(404).json({
+        success: false,
+        message: "Lecture Not Found",
+      });
+    }
+
+    // Allow creator, purchased student or free preview access
+    if (!isCreator && !hasPurchased && !lecture.isPreviewFree) {
+      return res.status(403).json({
+        success: false,
+        message: "You need to purchase this course to access this lecture",
+      });
+    }
+
     return res.status(200).json({
+      success: true,
       lecture,
     });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ message: "Failed to get Lectures by id" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to Get Lecture By Id",
+    });
   }
 };
-
-//publish and Unpublish Course Logic
 
 export const togglePublishCourse = async (req, res) => {
   try {
     const { courseId } = req.params;
     const { publish } = req.query; //true or false
     const course = await Course.findById(courseId);
+
     if (!course) {
       return res.status(404).json({
         message: "Course Not Found",
+      });
+    }
+    if (course.creator.toString() !== req.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to update this course",
       });
     }
     //publish status based on the query parameter
@@ -343,7 +670,6 @@ export const togglePublishCourse = async (req, res) => {
 };
 
 //get All The Published Courses
-
 export const getPublishedCourse = async (req, res) => {
   try {
     const courses = await Course.find({ isPublished: true }).populate({
@@ -369,6 +695,7 @@ export const getPublishedCourse = async (req, res) => {
     });
   }
 };
+// old searchCourse controller implementation
 // export const searchCourse = async (req, res) => {
 //   try {
 //     const { query = "", categories = [], sortByPrice = "" } = req.query;
@@ -446,6 +773,7 @@ export const getPublishedCourse = async (req, res) => {
 //   }
 // };
 
+// new searchCourse controller implementation
 export const searchCourse = async (req, res) => {
   try {
     const { query = "", categories = "", sortByPrice = "" } = req.query;
@@ -488,5 +816,8 @@ export const searchCourse = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
+    return res.status(500).json({
+      message: "Failed to Search Internal Server Error",
+    });
   }
 };

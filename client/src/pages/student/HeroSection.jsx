@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 function HeroSection() {
   const [searchQuery, setSearchQuery] = useState("");
