@@ -6,6 +6,7 @@ import {
 } from "../utils/cloudinary.js";
 import { Lecture } from "../models/lecture.model.js";
 import { unlink } from "node:fs/promises";
+import { CoursePurchase } from "../models/coursePurchase.model.js";
 
 export const createCourse = async (req, res) => {
   try {
