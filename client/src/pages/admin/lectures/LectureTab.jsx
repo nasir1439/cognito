@@ -1,5 +1,4 @@
-import React, { useEffect } from "react";
-
+import React, { useState } from "react";
 import {
   Card,
   CardHeader,
@@ -7,18 +6,19 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-
 import { Label } from "@/components/ui/label";
-
 import { Input } from "@/components/ui/input";
-
 import { Button } from "@/components/ui/button";
-
 import { Switch } from "@/components/ui/switch";
-
-import { Video, Trash2, UploadCloud, Sparkles, Loader2 } from "lucide-react";
-import { useState } from "react";
-
+import {
+  Video,
+  Trash2,
+  UploadCloud,
+  Sparkles,
+  Loader2,
+  ArrowLeft,
+  ExternalLink,
+} from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
@@ -27,146 +27,216 @@ import {
   useGetLectureByIdQuery,
   useRemoveLectureMutation,
 } from "@/features/api/courseApi";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import PageLoader from "../../../components/PageLoader";
 
 const MEDIA_API = `${import.meta.env.VITE_API_BASE_URL}/media`;
+
 const LectureTab = () => {
-  //   const isLoading = false;
-  const [lectureTitle, setLectureTitle] = useState("");
-  const [uploadVideoInfo, setUploadVideoInfo] = useState(null);
-  const [isFree, setIsFree] = useState(false);
+  const { courseId, lectureId } = useParams();
+
+  const {
+    data: lectureData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useGetLectureByIdQuery(lectureId, {
+    skip: !lectureId,
+  });
+
+  if (isLoading) {
+    return <PageLoader />;
+  }
+
+  if (isError) {
+    return (
+      <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-10 text-center sm:rounded-3xl">
+        <p className="text-sm font-medium text-red-400">
+          {error?.data?.message || "Failed to load lecture details."}
+        </p>
+
+        <Button
+          type="button"
+          onClick={() => refetch()}
+          className="mt-4 h-10 rounded-xl border border-white/10 bg-white/10 px-5 text-sm font-medium text-white hover:bg-white/15"
+        >
+          Try Again
+        </Button>
+      </div>
+    );
+  }
+
+  const lecture = lectureData?.lecture;
+
+  if (!lecture) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-10 text-center sm:rounded-3xl">
+        <p className="text-muted-foreground text-sm">Lecture not found.</p>
+      </div>
+    );
+  }
+
+  return (
+    <LectureEditor
+      key={lecture._id}
+      lecture={lecture}
+      courseId={courseId}
+      lectureId={lectureId}
+    />
+  );
+};
+
+const LectureEditor = ({ lecture, courseId, lectureId }) => {
+  const navigate = useNavigate();
+
+  // Initial form state comes directly from the fetched lecture.
+  const [lectureTitle, setLectureTitle] = useState(lecture.lectureTitle || "");
+
+  const [uploadVideoInfo, setUploadVideoInfo] = useState(() => ({
+    videoUrl: lecture.videoUrl || "",
+    publicId: lecture.publicId || "",
+  }));
+
+  const [isFree, setIsFree] = useState(lecture.isPreviewFree ?? false);
+
   const [mediaProgress, setMediaProgress] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const params = useParams();
-  const { courseId, lectureId } = params;
-  const [editLecture, { data, isLoading, isSuccess, error }] =
-    useEditLectureMutation();
+  const [editLecture, { isLoading }] = useEditLectureMutation();
 
-  const { data: lectureData } = useGetLectureByIdQuery(lectureId);
-  // console.log(lectureData);
-  const lecture = lectureData?.lecture;
+  const [removeLecture, { isLoading: removeLoading }] =
+    useRemoveLectureMutation();
 
-  useEffect(() => {
-    if (lecture) {
-      setLectureTitle(lecture.lectureTitle);
+  const isBusy = isLoading || removeLoading || mediaProgress;
 
-      setIsFree(lecture?.isPreviewFree ?? false);
+  // Remove Lecture
+  const removeLectureHandler = async () => {
+    try {
+      const response = await removeLecture(lectureId).unwrap();
+
+      toast.success(response?.message || "Lecture removed successfully");
+
+      navigate(`/admin/course/${courseId}/lecture`);
+    } catch (error) {
+      toast.error(error?.data?.message || "Failed to remove lecture");
+    }
+  };
+
+  // Update Lecture
+  const editLectureHandler = async () => {
+    const trimmedTitle = lectureTitle.trim();
+
+    if (!trimmedTitle) {
+      toast.error("Please enter a lecture title");
+      return;
+    }
+
+    if (!uploadVideoInfo?.videoUrl) {
+      toast.error("Please upload a lecture video");
+      return;
+    }
+
+    try {
+      const response = await editLecture({
+        lectureTitle: trimmedTitle,
+        videoInfo: uploadVideoInfo,
+        isPreviewFree: isFree,
+        courseId,
+        lectureId,
+      }).unwrap();
+
+      toast.success(response?.message || "Lecture updated successfully");
+    } catch (error) {
+      toast.error(error?.data?.message || "Failed to update lecture");
+    }
+  };
+
+  // Video Upload
+  const fileChangeHandler = async (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("video/")) {
+      toast.error("Please select a valid video file");
+      e.target.value = "";
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setMediaProgress(true);
+    setUploadProgress(0);
+
+    try {
+      const res = await axios.post(`${MEDIA_API}/upload-video`, formData, {
+        timeout: 600000,
+        onUploadProgress: ({ loaded, total }) => {
+          if (total) {
+            setUploadProgress(Math.round((loaded * 100) / total));
+          }
+        },
+      });
+
+      if (!res.data?.success || !res.data?.data?.url) {
+        throw new Error(res.data?.message || "Video upload failed");
+      }
 
       setUploadVideoInfo({
-        videoUrl: lecture.videoUrl,
-        publicId: lecture.publicId,
+        videoUrl: res.data.data.url,
+        publicId: res.data.data.public_id,
       });
-    }
-  }, [lecture]);
 
-  const [
-    removeLecture,
-    {
-      data: removeData,
-      isLoading: removeLoading,
-      isSuccess: removeSuccess,
-      error: removeError,
-    },
-  ] = useRemoveLectureMutation();
+      toast.success(res.data.message || "Video uploaded successfully");
+    } catch (error) {
+      console.error("Video upload error:", error);
 
-  const removeLectureHandler = async () => {
-    await removeLecture(lectureId);
-  };
-  const editLectureHandler = async () => {
-    editLecture({
-      lectureTitle,
-      videoInfo: uploadVideoInfo,
-      isPreviewFree: isFree,
-      courseId,
-      lectureId,
-    });
-  };
-
-  const fileChangeHandler = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const formData = new FormData();
-      formData.append("file", file);
-      setMediaProgress(true);
-      try {
-        const res = await axios.post(`${MEDIA_API}/upload-video`, formData, {
-          timeout: 600000,
-
-          onUploadProgress: ({ loaded, total }) => {
-            setUploadProgress(Math.round((loaded * 100) / total));
-          },
-        });
-        if (res.data.success) {
-          setUploadVideoInfo({
-            videoUrl: res.data.data.url,
-            publicId: res.data.data.public_id,
-          });
-          toast.success(res.data.message);
-        }
-      } catch (error) {
-        console.log(error);
-        toast.error("Video Upload Failed");
-      } finally {
-        setMediaProgress(false);
-        setUploadProgress(0);
-      }
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Video upload failed",
+      );
+    } finally {
+      setMediaProgress(false);
+      setUploadProgress(0);
+      e.target.value = "";
     }
   };
 
-  useEffect(() => {
-    if (isSuccess) {
-      toast.success(data?.message);
-    }
-    if (error) {
-      toast.error(error?.data?.message || "Something went wrong");
-    }
-  }, [isSuccess, error, data]);
-
-  useEffect(() => {
-    if (removeSuccess) {
-      toast.success(removeData?.message || "Lecture Removed Successfully");
-    }
-    if (removeError) {
-      toast.error(removeError?.data?.message || "Something Went Wrong");
-    }
-  }, [removeData, removeSuccess, removeError]);
   return (
-    <div className="relative px-4 py-6">
-      {/* Background Glow */}
-      <div className="pointer-events-none absolute left-0 top-10 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl" />
-
-      <div className="pointer-events-none absolute bottom-0 right-0 h-72 w-72 rounded-full bg-violet-500/10 blur-3xl" />
+    <div className="relative isolate w-full min-w-0 overflow-x-clip">
+      {/* Background Glows */}
+      <div className="pointer-events-none absolute top-10 left-0 -z-10 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 bottom-0 -z-10 h-72 w-72 rounded-full bg-violet-500/10 blur-3xl" />
 
       {/* Main Card */}
-      <Card className="relative overflow-hidden rounded-[30px] border border-white/10 bg-white/10 shadow-2xl backdrop-blur-2xl">
+      <Card className="relative isolate w-full min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-xl shadow-black/5 backdrop-blur-2xl sm:rounded-3xl">
         {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-violet-500/5" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-violet-500/5" />
 
         {/* Header */}
-        <CardHeader className="relative flex flex-col gap-6 border-b border-white/10 px-8 py-7 lg:flex-row lg:items-center lg:justify-between">
-          {/* Left */}
-          <div className="flex items-start gap-4">
-            {/* Icon */}
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/20">
-              <Video className="text-white" size={26} />
+        <CardHeader className="relative z-10 flex flex-col gap-4 border-b border-white/10 p-4 sm:p-6 lg:flex-row lg:items-center lg:justify-between lg:p-8">
+          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/20 sm:h-14 sm:w-14 sm:rounded-2xl">
+              <Video className="h-5 w-5 text-white sm:h-7 sm:w-7" />
             </div>
 
-            {/* Text */}
-            <div>
+            <div className="min-w-0">
               <div className="mb-2 flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-indigo-400" />
+                <Sparkles className="h-3.5 w-3.5 text-indigo-400 sm:h-4 sm:w-4" />
 
-                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-                  Lecture Settings
+                <span className="text-xs font-semibold tracking-wide text-indigo-400 sm:text-sm">
+                  LECTURE SETTINGS
                 </span>
               </div>
 
-              <CardTitle className="text-3xl font-bold tracking-tight">
+              <CardTitle className="text-xl leading-tight font-extrabold tracking-tight sm:text-2xl">
                 Edit Lecture
               </CardTitle>
 
-              <CardDescription className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              <CardDescription className="text-muted-foreground mt-2 max-w-2xl text-xs leading-relaxed sm:text-sm">
                 Update your lecture content, upload lesson videos, and control
                 preview access for students.
               </CardDescription>
@@ -175,100 +245,115 @@ const LectureTab = () => {
 
           {/* Delete Button */}
           <Button
+            type="button"
             onClick={removeLectureHandler}
-            disabled={removeLoading}
-            className="rounded-2xl bg-red-500/90 px-6 text-white hover:bg-red-600"
+            disabled={isBusy}
+            className="h-10 w-full shrink-0 rounded-xl border border-transparent bg-red-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 sm:w-auto sm:rounded-2xl"
           >
-            <Trash2 className="mr-2 h-4 w-4" />
             {removeLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Please Wait...
-              </>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              "Remove Lecture"
+              <Trash2 className="mr-2 h-4 w-4" />
             )}
+
+            {removeLoading ? "Removing..." : "Remove Lecture"}
           </Button>
         </CardHeader>
 
         {/* Content */}
-        <CardContent className="relative space-y-8 rounded-b-[30px] bg-transparent px-8 py-8">
+        <CardContent className="relative z-10 min-w-0 space-y-6 p-4 sm:space-y-8 sm:p-6 lg:p-8">
           {/* Lecture Title */}
-          <div className="space-y-3">
-            <Label className="text-sm font-semibold">Lecture Title</Label>
+          <div className="min-w-0 space-y-2">
+            <Label htmlFor="lectureTitle" className="text-sm font-semibold">
+              Lecture Title
+            </Label>
 
             <Input
+              id="lectureTitle"
               type="text"
               value={lectureTitle}
               onChange={(e) => setLectureTitle(e.target.value)}
               placeholder="Ex. Introduction to JavaScript"
-              className="h-12 rounded-2xl border-white/10 bg-white/5 backdrop-blur-xl focus-visible:ring-2 focus-visible:ring-indigo-500"
+              maxLength={120}
+              disabled={isBusy}
+              className="bg-background/40 placeholder:text-muted-foreground/60 h-11 min-w-0 rounded-xl border-white/10 text-sm backdrop-blur-xl focus-visible:ring-2 focus-visible:ring-indigo-500 sm:h-12 sm:rounded-2xl"
             />
+
+            <p className="text-muted-foreground text-right text-xs">
+              {lectureTitle.length}/120 characters
+            </p>
           </div>
 
           {/* Video Upload */}
-          <div className="space-y-3">
-            <Label className="flex items-center gap-2 text-sm font-semibold">
+          <div className="min-w-0 space-y-3">
+            <Label
+              htmlFor="lectureVideo"
+              className="flex items-center gap-2 text-sm font-semibold"
+            >
               <UploadCloud className="h-4 w-4 text-violet-400" />
               Upload Lecture Video
               <span className="text-red-400">*</span>
             </Label>
 
-            <div className="rounded-2xl border border-white/10 bg-background/40 p-5 backdrop-blur-xl">
+            <div className="bg-background/30 rounded-xl border border-white/10 p-3 backdrop-blur-xl sm:rounded-2xl sm:p-5">
               <Input
+                id="lectureVideo"
                 type="file"
                 accept="video/*"
                 onChange={fileChangeHandler}
-                className="border-0 bg-transparent text-sm text-muted-foreground"
+                disabled={isBusy}
+                className="text-muted-foreground h-auto min-w-0 cursor-pointer border-0 bg-transparent p-0 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-500/15 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-indigo-400 hover:file:bg-indigo-500/25 sm:text-sm"
               />
 
-              <p className="mt-3 text-xs text-muted-foreground">
-                Supported formats: MP4, MOV, MKV
+              <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
+                Supported formats: MP4, MOV, MKV.
               </p>
             </div>
           </div>
-          {/* Uploaded Video Preview */}
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+
+          {/* Video Preview */}
+          <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3 backdrop-blur-xl sm:rounded-2xl sm:p-4">
             {uploadVideoInfo?.videoUrl ? (
-              <div className="flex items-center gap-4">
-                {/* Video Thumbnail */}
+              <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
+                {/* Video Preview */}
                 <video
                   src={uploadVideoInfo.videoUrl}
-                  className="h-20 w-32 rounded-xl border border-white/10 object-cover"
+                  controls
+                  preload="metadata"
+                  className="aspect-video w-full shrink-0 rounded-xl border border-white/10 bg-black object-contain sm:aspect-video sm:w-40"
                 />
 
-                {/* Video Info */}
-                <div className="flex-1">
-                  <h4 className="text-sm font-semibold text-white">
+                {/* Video Information */}
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-sm font-semibold">
                     Lecture Video Uploaded
                   </h4>
 
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
                     Your lecture video is ready for preview.
                   </p>
-                </div>
 
-                {/* Preview Button */}
-                <a
-                  href={uploadVideoInfo.videoUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-xl bg-indigo-500 px-4 py-2 text-xs font-medium text-white transition hover:bg-indigo-600"
-                >
-                  Preview
-                </a>
+                  <a
+                    href={uploadVideoInfo.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-indigo-400 transition-colors hover:text-indigo-300"
+                  >
+                    Open Video
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/5">
-                  <Video className="h-5 w-5 text-muted-foreground" />
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 sm:h-12 sm:w-12">
+                  <Video className="h-5 w-5 text-indigo-400" />
                 </div>
 
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    No video uploaded
-                  </p>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">No video uploaded</p>
 
-                  <p className="text-xs text-muted-foreground/70">
+                  <p className="text-muted-foreground mt-1 text-xs">
                     Upload a lecture video to continue.
                   </p>
                 </div>
@@ -276,12 +361,29 @@ const LectureTab = () => {
             )}
           </div>
 
+          {/* Upload Progress */}
+          {mediaProgress && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground font-medium">
+                  Uploading video...
+                </span>
+
+                <span className="font-semibold text-indigo-400">
+                  {uploadProgress}%
+                </span>
+              </div>
+
+              <Progress value={uploadProgress} />
+            </div>
+          )}
+
           {/* Free Preview */}
-          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-4 backdrop-blur-xl">
-            <div>
+          <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:rounded-2xl sm:px-5 sm:py-4">
+            <div className="min-w-0">
               <h3 className="text-sm font-semibold">Free Preview Access</h3>
 
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="text-muted-foreground mt-1 text-xs leading-relaxed sm:text-sm">
                 Students can watch this lecture before purchasing the course.
               </p>
             </div>
@@ -290,35 +392,36 @@ const LectureTab = () => {
               id="free-video"
               checked={!!isFree}
               onCheckedChange={setIsFree}
+              disabled={isBusy}
             />
           </div>
 
-          {mediaProgress && (
-            <div className="my-4">
-              <Progress value={uploadProgress} />
-              <p>{uploadProgress} %Uploaded</p>
-            </div>
-          )}
           {/* Divider */}
-          <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          <div className="via-border/70 h-px w-full bg-gradient-to-r from-transparent to-transparent" />
 
           {/* Footer Buttons */}
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <Link to={`/admin/course/${courseId}/lecture`}>
+            <Link
+              to={`/admin/course/${courseId}/lecture`}
+              className="w-full sm:w-auto"
+            >
               <Button
-                variant="outline"
-                className="h-11 rounded-2xl border-white/10 bg-white/5 px-6 backdrop-blur-xl hover:bg-white/10"
+                type="button"
+                disabled={isBusy}
+                className="h-11 w-full rounded-xl border border-white/10 bg-white/10 px-5 text-sm font-medium text-gray-600 shadow-sm backdrop-blur-xl transition-colors hover:bg-white/15 sm:w-auto sm:rounded-2xl"
               >
+                <ArrowLeft className="mr-2 h-4 w-4" />
                 Cancel
               </Button>
             </Link>
 
             <Button
+              type="button"
               disabled={
-                isLoading || mediaProgress || !uploadVideoInfo?.videoUrl
+                isBusy || !uploadVideoInfo?.videoUrl || !lectureTitle.trim()
               }
               onClick={editLectureHandler}
-              className="h-11 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 px-8 font-semibold text-white transition-all duration-300 hover:from-indigo-600 hover:to-violet-600 hover:shadow-lg hover:shadow-indigo-500/30"
+              className="h-11 w-full rounded-xl border border-indigo-400/30 bg-gradient-to-r from-indigo-600 to-violet-600 px-6 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition-all duration-300 hover:from-indigo-700 hover:to-violet-700 hover:shadow-lg hover:shadow-indigo-500/30 sm:w-auto sm:rounded-2xl"
             >
               {isLoading ? (
                 <>

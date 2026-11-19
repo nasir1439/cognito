@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import { userLoggedIn, userLoggedOut } from "../authSlice";
+import { purchaseApi } from "./purchaseApi";
 
 const USER_API = `${import.meta.env.VITE_API_BASE_URL}/user/`;
 
@@ -37,6 +38,8 @@ export const authApi = createApi({
               user: result.data.user,
             }),
           );
+          // Refetch active course purchase-status queries after login
+          dispatch(purchaseApi.util.invalidateTags(["CoursePurchaseStatus"]));
         } catch (error) {
           console.error(error);
         }
@@ -51,6 +54,7 @@ export const authApi = createApi({
       async onQueryStarted(_, { dispatch }) {
         try {
           dispatch(userLoggedOut());
+          dispatch(purchaseApi.util.invalidateTags(["CoursePurchaseStatus"]));
         } catch (error) {
           console.error(error);
         }

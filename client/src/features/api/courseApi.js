@@ -4,7 +4,11 @@ const COURSE_API = `${import.meta.env.VITE_API_BASE_URL}/course`;
 
 export const courseApi = createApi({
   reducerPath: "courseApi",
-  tagTypes: ["Refetch_Creator_Course", "Refetch_Lecture"],
+  tagTypes: [
+    "Refetch_Creator_Course",
+    "Refetch_Lecture",
+    "Refetch_Published_Course",
+  ],
   baseQuery: fetchBaseQuery({
     baseUrl: COURSE_API,
     credentials: "include",
@@ -87,13 +91,14 @@ export const courseApi = createApi({
         url: `/${courseId}?publish=${query}`,
         method: "PATCH",
       }),
-      invalidatesTags: ["Refetch_Creator_Course"],
+      invalidatesTags: ["Refetch_Creator_Course", "Refetch_Published_Course"],
     }),
     getPublishedCourse: builder.query({
       query: () => ({
         url: "/published-courses",
         method: "GET",
       }),
+      providesTags: ["Refetch_Published_Course"],
     }),
     // getSearchCourse: builder.query({
     //   query: ({ searchQuery = "", categories = [], sortByPrice = "" }) => {

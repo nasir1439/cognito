@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -14,17 +15,25 @@ import {
 } from "@/components/ui/dialog";
 
 import { Button } from "@/components/ui/button";
-
 import { Field, FieldGroup } from "@/components/ui/field";
-
 import { Input } from "@/components/ui/input";
-
 import { Label } from "@/components/ui/label";
 
-import { Loader2, Pencil, User2 } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpen,
+  Camera,
+  GraduationCap,
+  Loader2,
+  Mail,
+  Pencil,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 
 import CourseCard from "./CourseCard";
 import ProfileSkeleton from "./ProfileSkeleton";
+
 import {
   useLoadUserQuery,
   useUpdateUserMutation,
@@ -35,227 +44,360 @@ import { toast } from "sonner";
 const Profile = () => {
   const [name, setName] = useState("");
   const [profilePhoto, setProfilePhoto] = useState(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+
   const { data, isLoading, refetch } = useLoadUserQuery();
-  // console.log(data);
 
-  const [
-    updateUser,
-    {
-      data: updateUserData,
-      isLoading: updateUserIsLoading,
-      error,
-      isSuccess,
-      isError,
-    },
-  ] = useUpdateUserMutation();
+  const [updateUser, { isLoading: updateUserIsLoading }] =
+    useUpdateUserMutation();
 
-  useEffect(() => {
-    if (isSuccess) {
-      refetch();
-      toast.success(updateUserData?.message || "Profile Updated.");
-    }
+  const user = data?.user;
+  const enrolledCourses = user?.enrolledCourses || [];
 
-    if (isError) {
-      toast.error(error?.data?.message || "Failed To Update Profile");
-    }
-  }, [error, updateUserData, isSuccess, isError, refetch]);
+  const instructorName = user?.name || "User";
+  const userInitial = instructorName.charAt(0).toUpperCase();
 
   const onChangeHandler = (e) => {
     const file = e.target.files?.[0];
-    if (file) setProfilePhoto(file);
+
+    if (file) {
+      setProfilePhoto(file);
+    }
   };
 
-  const user = data?.user;
+  const handleDialogChange = (open) => {
+    setIsEditOpen(open);
 
-  if (isLoading) return <ProfileSkeleton />;
-  const userUpdateHandler = async () => {
+    if (open) {
+      setName(user?.name || "");
+      setProfilePhoto(null);
+    }
+  };
+
+  const userUpdateHandler = async (e) => {
+    e.preventDefault();
+
     const formData = new FormData();
 
-    if (name.trim() !== "") {
-      formData.append("name", name);
+    if (name.trim() !== "" && name.trim() !== user?.name) {
+      formData.append("name", name.trim());
     }
 
     if (profilePhoto) {
       formData.append("profilePhoto", profilePhoto);
     }
 
-    await updateUser(formData);
+    if (!name.trim() && !profilePhoto) {
+      toast.info("Please make some changes before saving.");
+      return;
+    }
+
+    if (name.trim() === user?.name && !profilePhoto) {
+      toast.info("No changes detected.");
+      return;
+    }
+
+    try {
+      const response = await updateUser(formData).unwrap();
+
+      await refetch();
+
+      toast.success(response?.message || "Profile updated successfully.");
+
+      setProfilePhoto(null);
+      setIsEditOpen(false);
+    } catch (error) {
+      toast.error(
+        error?.data?.message || error?.message || "Failed to update profile.",
+      );
+    }
   };
 
+  if (isLoading) {
+    return <ProfileSkeleton />;
+  }
+
   return (
-    <section className="relative min-h-screen overflow-hidden bg-background pt-28 pb-20">
+    <section className="bg-background relative min-h-screen overflow-hidden pt-24 pb-16 sm:pt-28 sm:pb-20">
       {/* Background */}
-      <div className="absolute inset-0 bg-gradient-to-b from-background via-indigo-100/20 to-background dark:from-slate-950 dark:via-indigo-950/20 dark:to-slate-950" />
+      <div className="from-background to-background pointer-events-none absolute inset-0 bg-gradient-to-b via-indigo-100/20 dark:from-slate-950 dark:via-indigo-950/20 dark:to-slate-950" />
 
       {/* Glow */}
-      <div className="absolute top-10 left-1/2 h-[350px] w-[350px] -translate-x-1/2 rounded-full bg-indigo-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute top-10 left-1/2 h-[280px] w-[280px] -translate-x-1/2 rounded-full bg-indigo-500/10 blur-3xl sm:h-[400px] sm:w-[400px]" />
 
-      <div className="relative mx-auto max-w-7xl px-4">
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Heading */}
-        <div className="mb-10">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background/60 px-4 py-1.5 backdrop-blur">
-            <User2 size={16} />
-            <span className="text-sm text-muted-foreground">
+        <div className="mb-8 sm:mb-12">
+          <div className="border-border bg-background/70 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 backdrop-blur sm:px-4">
+            <UserRound className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+
+            <span className="text-muted-foreground text-xs sm:text-sm">
               Your Personal Profile
             </span>
           </div>
 
-          <h1 className="mt-6 text-4xl font-extrabold tracking-tight md:text-5xl">
+          <h1 className="mt-5 text-3xl font-extrabold tracking-tight sm:mt-6 sm:text-4xl md:text-5xl">
             My{" "}
             <span className="bg-gradient-to-r from-indigo-500 to-violet-500 bg-clip-text text-transparent">
               Profile
             </span>
           </h1>
 
-          <p className="mt-4 max-w-2xl text-lg text-muted-foreground">
+          <p className="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed sm:mt-4 sm:text-base md:text-lg">
             Manage your profile information and continue your learning journey.
           </p>
         </div>
 
         {/* Profile Card */}
-        <div className="rounded-3xl border bg-background/60 p-8 shadow-xl backdrop-blur-xl">
-          <div className="flex flex-col items-center gap-8 md:flex-row md:items-start">
-            {/* Avatar */}
-            <div className="relative">
-              <Avatar className="h-32 w-32 border-4 border-background shadow-2xl">
-                <AvatarImage
-                  src={user?.photoUrl || "https://github.com/shadcn.png"}
-                />
-                <AvatarFallback>CN</AvatarFallback>
-              </Avatar>
+        <div className="border-border/60 bg-background/70 overflow-hidden rounded-2xl border shadow-lg shadow-indigo-500/5 backdrop-blur-xl sm:rounded-3xl sm:shadow-xl">
+          {/* Card Header */}
+          <div className="h-2 bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500" />
 
-              <div className="absolute -bottom-2 -right-2 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-lg">
-                <Pencil size={16} />
+          <div className="p-5 sm:p-7 md:p-9">
+            <div className="flex flex-col items-center gap-6 sm:gap-8 md:flex-row md:items-start">
+              {/* Avatar */}
+              <div className="relative shrink-0">
+                <Avatar className="border-background h-24 w-24 border-4 shadow-xl ring-2 ring-indigo-500/20 sm:h-32 sm:w-32">
+                  <AvatarImage src={user?.photoUrl} alt={instructorName} />
+
+                  <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-violet-500 text-3xl font-bold text-white sm:text-4xl">
+                    {userInitial}
+                  </AvatarFallback>
+                </Avatar>
+
+                <div className="border-background absolute -right-1 -bottom-1 flex h-8 w-8 items-center justify-center rounded-full border-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-md sm:h-10 sm:w-10">
+                  <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                </div>
               </div>
-            </div>
 
-            {/* Info */}
-            <div className="flex-1">
-              <div className="space-y-5">
-                <div>
-                  <p className="text-sm text-muted-foreground">Full Name</p>
+              {/* User Information */}
+              <div className="min-w-0 flex-1 text-center md:text-left">
+                <div className="mb-5">
+                  <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+                    Account Information
+                  </p>
 
-                  <h2 className="text-2xl font-bold">{user?.name}</h2>
+                  <h2 className="mt-1.5 text-xl font-bold tracking-tight break-words sm:text-2xl">
+                    {user?.name || "User"}
+                  </h2>
                 </div>
 
-                <div>
-                  <p className="text-sm text-muted-foreground">Email Address</p>
+                <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
+                  {/* Name */}
+                  <div className="border-border/60 bg-muted/20 min-w-0 rounded-xl border p-3.5 sm:p-4">
+                    <div className="text-muted-foreground mb-2 flex items-center justify-center gap-2 md:justify-start">
+                      <UserRound className="h-4 w-4" />
+                      <p className="text-xs font-medium sm:text-sm">
+                        Full Name
+                      </p>
+                    </div>
 
-                  <h2 className="text-lg font-medium">{user?.email}</h2>
-                </div>
-
-                <div>
-                  <p className="text-sm text-muted-foreground">Role</p>
-
-                  <div className="mt-1 inline-flex rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-1 text-sm font-medium text-white">
-                    {user?.role.toUpperCase()}
+                    <p className="text-sm font-semibold break-words sm:text-base">
+                      {user?.name || "Not provided"}
+                    </p>
                   </div>
+
+                  {/* Email */}
+                  <div className="border-border/60 bg-muted/20 min-w-0 rounded-xl border p-3.5 sm:p-4">
+                    <div className="text-muted-foreground mb-2 flex items-center justify-center gap-2 md:justify-start">
+                      <Mail className="h-4 w-4" />
+                      <p className="text-xs font-medium sm:text-sm">
+                        Email Address
+                      </p>
+                    </div>
+
+                    <p className="text-sm font-semibold break-all sm:text-base">
+                      {user?.email || "Not provided"}
+                    </p>
+                  </div>
+
+                  {/* Role */}
+                  <div className="border-border/60 bg-muted/20 rounded-xl border p-3.5 sm:p-4">
+                    <div className="text-muted-foreground mb-2 flex items-center justify-center gap-2 md:justify-start">
+                      <ShieldCheck className="h-4 w-4" />
+                      <p className="text-xs font-medium sm:text-sm">
+                        Account Role
+                      </p>
+                    </div>
+
+                    <div className="flex justify-center md:justify-start">
+                      <span className="inline-flex rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 px-3 py-1 text-xs font-semibold text-white capitalize sm:text-sm">
+                        {user?.role || "User"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Enrolled Courses */}
+                  {user?.role === "student" && (
+                    <div className="border-border/60 bg-muted/20 rounded-xl border p-3.5 sm:p-4">
+                      <div className="text-muted-foreground mb-2 flex items-center justify-center gap-2 md:justify-start">
+                        <BookOpen className="h-4 w-4" />
+                        <p className="text-xs font-medium sm:text-sm">
+                          Enrolled Courses
+                        </p>
+                      </div>
+
+                      <p className="text-sm font-semibold sm:text-base">
+                        {enrolledCourses.length}{" "}
+                        {enrolledCourses.length === 1 ? "Course" : "Courses"}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                {/* Dialog */}
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button className="mt-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-300 hover:from-indigo-600 hover:to-violet-600">
-                      Edit Profile
-                    </Button>
-                  </DialogTrigger>
+                {/* Edit Profile Dialog */}
+                <div className="mt-6 flex justify-center md:justify-start">
+                  <Dialog open={isEditOpen} onOpenChange={handleDialogChange}>
+                    <DialogTrigger asChild>
+                      <Button className="h-10 w-full rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-5 text-sm font-semibold shadow-md shadow-indigo-500/10 transition-all duration-300 hover:from-indigo-600 hover:to-violet-600 sm:w-auto">
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit Profile
+                      </Button>
+                    </DialogTrigger>
 
-                  <DialogContent className="rounded-3xl border bg-background/95 backdrop-blur-xl sm:max-w-md">
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        userUpdateHandler();
-                      }}
-                    >
-                      <DialogHeader>
-                        <DialogTitle>Edit Profile</DialogTitle>
+                    <DialogContent className="border-border/60 bg-background/95 max-h-[90vh] overflow-y-auto rounded-2xl backdrop-blur-xl sm:max-w-md sm:rounded-3xl">
+                      <form onSubmit={userUpdateHandler}>
+                        <DialogHeader>
+                          <DialogTitle className="text-xl font-bold">
+                            Edit Profile
+                          </DialogTitle>
 
-                        <DialogDescription>
-                          Update your profile information here.
-                        </DialogDescription>
-                      </DialogHeader>
+                          <DialogDescription>
+                            Update your personal information and profile photo.
+                          </DialogDescription>
+                        </DialogHeader>
 
-                      <FieldGroup className="space-y-5">
-                        <Field>
-                          <Label htmlFor="name">Name</Label>
+                        <FieldGroup className="mt-6 space-y-5">
+                          <Field>
+                            <Label htmlFor="profile-name">Full Name</Label>
 
-                          <Input
-                            id="name"
-                            name="name"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder="Enter your name"
-                            className="rounded-xl"
-                          />
-                        </Field>
+                            <Input
+                              id="profile-name"
+                              name="name"
+                              value={name}
+                              onChange={(e) => setName(e.target.value)}
+                              placeholder="Enter your name"
+                              className="h-11 rounded-xl"
+                              autoComplete="name"
+                              disabled={updateUserIsLoading}
+                            />
+                          </Field>
 
-                        <Field>
-                          <Label htmlFor="profile-photo">Profile Photo</Label>
+                          <Field>
+                            <Label htmlFor="profile-photo">Profile Photo</Label>
 
-                          <Input
-                            id="profile-photo"
-                            type="file"
-                            onChange={onChangeHandler}
-                            accept="image/*"
-                            className="rounded-xl"
-                          />
-                        </Field>
-                      </FieldGroup>
+                            <Input
+                              id="profile-photo"
+                              type="file"
+                              name="profilePhoto"
+                              onChange={onChangeHandler}
+                              accept="image/*"
+                              className="file:bg-muted min-h-11 cursor-pointer rounded-xl file:mr-3 file:rounded-lg file:border-0 file:px-3 file:py-1 file:text-xs file:font-medium"
+                              disabled={updateUserIsLoading}
+                            />
 
-                      <DialogFooter className="mt-6">
-                        <DialogClose asChild>
-                          <Button variant="outline" className="rounded-xl">
-                            Cancel
+                            {profilePhoto && (
+                              <p className="text-muted-foreground mt-1 text-xs break-all">
+                                Selected: {profilePhoto.name}
+                              </p>
+                            )}
+                          </Field>
+                        </FieldGroup>
+
+                        <DialogFooter className="mt-7 flex-col-reverse gap-2 sm:flex-row">
+                          <DialogClose asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-10 rounded-xl"
+                              disabled={updateUserIsLoading}
+                            >
+                              Cancel
+                            </Button>
+                          </DialogClose>
+
+                          <Button
+                            type="submit"
+                            disabled={updateUserIsLoading}
+                            className="h-10 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 font-semibold transition-all duration-300 hover:from-indigo-600 hover:to-violet-600"
+                          >
+                            {updateUserIsLoading ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              "Save Changes"
+                            )}
                           </Button>
-                        </DialogClose>
-
-                        <Button
-                          disabled={updateUserIsLoading}
-                          type="submit"
-                          className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-300 hover:from-indigo-600 hover:to-violet-600"
-                        >
-                          {updateUserIsLoading ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Please Wait...
-                            </>
-                          ) : (
-                            "Save Changes"
-                          )}
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </DialogContent>
-                </Dialog>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
+        {/* Student Enrolled Courses */}
         {user?.role === "student" && (
-          <div className="mt-16">
-            <h2 className="text-3xl font-extrabold tracking-tight">
-              Courses{" "}
-              <span className="bg-gradient-to-r from-indigo-500 to-violet-500 bg-clip-text text-transparent">
-                You're Enrolled In
-              </span>
-            </h2>
+          <div className="mt-12 sm:mt-16">
+            <div className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="mb-2 inline-flex items-center gap-2 text-xs font-semibold tracking-wider text-indigo-500 uppercase">
+                  <GraduationCap className="h-4 w-4" />
+                  Your Learning Journey
+                </div>
 
-            <p className="mt-3 text-muted-foreground">
-              Continue learning from your enrolled courses.
-            </p>
+                <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+                  Courses{" "}
+                  <span className="bg-gradient-to-r from-indigo-500 to-violet-500 bg-clip-text text-transparent">
+                    You're Enrolled In
+                  </span>
+                </h2>
 
-            {user?.enrolledCourses.length === 0 ? (
-              <div className="mt-8 flex flex-col items-center justify-center rounded-3xl border border-dashed py-20 text-center">
-                <h2 className="text-2xl font-bold">No Courses Found</h2>
-
-                <p className="mt-3 text-muted-foreground">
-                  You are not enrolled in any courses yet.
+                <p className="text-muted-foreground mt-2 text-xs leading-relaxed sm:text-sm">
+                  Continue learning from your enrolled courses.
                 </p>
               </div>
+
+              {enrolledCourses.length > 0 && (
+                <span className="w-fit rounded-full border border-indigo-500/20 bg-indigo-500/5 px-3 py-1.5 text-xs font-semibold text-indigo-500">
+                  {enrolledCourses.length}{" "}
+                  {enrolledCourses.length === 1 ? "Course" : "Courses"}
+                </span>
+              )}
+            </div>
+
+            {enrolledCourses.length === 0 ? (
+              <div className="border-border/70 bg-background/40 flex flex-col items-center justify-center rounded-2xl border border-dashed px-5 py-12 text-center sm:rounded-3xl sm:py-16">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 text-indigo-500">
+                  <GraduationCap className="h-7 w-7" />
+                </div>
+
+                <h3 className="text-lg font-bold sm:text-xl">
+                  No Courses Found
+                </h3>
+
+                <p className="text-muted-foreground mt-2 max-w-sm text-xs leading-relaxed sm:text-sm">
+                  You haven't enrolled in any courses yet. Explore our courses
+                  and start learning something new.
+                </p>
+
+                <Button
+                  asChild
+                  className="mt-6 h-10 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-5 text-sm font-semibold hover:from-indigo-600 hover:to-violet-600"
+                >
+                  <Link to="/course/search?query=">
+                    Explore Courses
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
             ) : (
-              <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-                {user?.enrolledCourses.map((course) => (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-7">
+                {enrolledCourses.map((course) => (
                   <CourseCard key={course._id} course={course} />
                 ))}
               </div>

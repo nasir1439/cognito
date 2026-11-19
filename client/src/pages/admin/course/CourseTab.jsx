@@ -9,12 +9,8 @@ import {
 } from "@/components/ui/card";
 
 import { Button } from "@/components/ui/button";
-
 import { Label } from "@/components/ui/label";
-
 import { Input } from "@/components/ui/input";
-
-import RichTextEditor from "../../../components/RichTextEditor";
 
 import {
   Select,
@@ -28,384 +24,422 @@ import {
 
 import {
   Loader2,
-  Sparkles,
   BookOpen,
   Layers3,
   IndianRupee,
   ImagePlus,
+  Sparkles,
 } from "lucide-react";
+
 import { useNavigate, useParams } from "react-router-dom";
+
 import {
   useEditCourseMutation,
   useGetCourseByIdQuery,
   usePublishCourseMutation,
 } from "../../../features/api/courseApi";
+
 import { toast } from "sonner";
 import PageLoader from "../../../components/PageLoader";
+import RichTextEditor from "../../../components/RichTextEditor";
 
+// Parent-level data fetching
 const CourseTab = () => {
-  const navigate = useNavigate();
-  const [editCourse, { data, isLoading, isSuccess, error }] =
-    useEditCourseMutation();
-
-  const params = useParams();
-
-  // console.log(params.courseId);
-
-  const courseId = params.courseId;
-
-  const [input, setInput] = useState({
-    courseTitle: "",
-    subTitle: "",
-    description: "",
-    category: "",
-    courseLevel: "",
-    coursePrice: "",
-    courseThumbnail: "",
-  });
+  const { courseId } = useParams();
 
   const {
     data: courseByIdData,
-    isLoading: courseByIdLoading,
-    refetch,
-  } = useGetCourseByIdQuery(courseId, { refetchOnMountOrArgChange: true });
+    isLoading,
+    isError,
+    error,
+  } = useGetCourseByIdQuery(courseId, {
+    skip: !courseId,
+    refetchOnMountOrArgChange: true,
+  });
 
-  const [publishCourse] = usePublishCourseMutation();
+  if (isLoading) return <PageLoader />;
 
-  useEffect(() => {
-    if (courseByIdData?.course) {
-      const course = courseByIdData?.course;
-      setInput({
-        courseTitle: course.courseTitle,
-        subTitle: course.subTitle,
-        description: course.description,
-        category: course.category,
-        courseLevel: course.courseLevel,
-        coursePrice: course.coursePrice,
-        courseThumbnail: "",
-      });
-    }
-  }, [courseByIdData]);
+  if (isError) {
+    return (
+      <div className="relative rounded-2xl border border-red-500/20 bg-red-500/5 p-5 text-sm text-red-400 sm:p-8">
+        {error?.data?.message || "Unable to load course information."}
+      </div>
+    );
+  }
+
+  const course = courseByIdData?.course;
+
+  if (!course) {
+    return (
+      <div className="text-muted-foreground rounded-2xl border border-white/10 bg-white/5 p-5 text-center text-sm sm:p-8">
+        Course not found.
+      </div>
+    );
+  }
+
+  return <CourseEditor key={course._id} course={course} />;
+};
+
+// Form and course editing
+const CourseEditor = ({ course }) => {
+  const navigate = useNavigate();
+
+  const [editCourse, { data, isLoading, isSuccess, error }] =
+    useEditCourseMutation();
+
+  const [publishCourse, { isLoading: isPublishing }] =
+    usePublishCourseMutation();
+
+  const [input, setInput] = useState(() => ({
+    courseTitle: course.courseTitle || "",
+    subTitle: course.subTitle || "",
+    description: course.description || "",
+    category: course.category || "",
+    courseLevel: course.courseLevel || "",
+    coursePrice: course.coursePrice ?? "",
+    courseThumbnail: "",
+  }));
 
   const [previewThumbnail, setPreviewThumbnail] = useState("");
 
+  // Form input handler
   const changeEventHandler = (e) => {
     const { name, value } = e.target;
 
-    setInput({
-      ...input,
+    setInput((prev) => ({
+      ...prev,
       [name]: value,
-    });
+    }));
   };
 
+  // Category handler
   const selectCategory = (value) => {
-    setInput({ ...input, category: value });
+    setInput((prev) => ({
+      ...prev,
+      category: value,
+    }));
   };
 
+  // Course level handler
   const selectCourseLevel = (value) => {
-    setInput({ ...input, courseLevel: value });
+    setInput((prev) => ({
+      ...prev,
+      courseLevel: value,
+    }));
   };
-  // get file
+
+  // Thumbnail handler
   const selectThumbnail = (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setInput({ ...input, courseThumbnail: file });
-      const fileReader = new FileReader();
-      fileReader.onloadend = () => setPreviewThumbnail(fileReader.result);
-      fileReader.readAsDataURL(file);
-    }
+
+    if (!file) return;
+
+    setInput((prev) => ({
+      ...prev,
+      courseThumbnail: file,
+    }));
+
+    const fileReader = new FileReader();
+
+    fileReader.onloadend = () => {
+      setPreviewThumbnail(fileReader.result);
+    };
+
+    fileReader.readAsDataURL(file);
   };
 
-  const updateInputHanlder = async () => {
-    // console.log(input);
+  // Update course
+  const updateInputHandler = async () => {
     const formData = new FormData();
+
     formData.append("courseTitle", input.courseTitle);
     formData.append("subTitle", input.subTitle);
     formData.append("description", input.description);
     formData.append("category", input.category);
     formData.append("courseLevel", input.courseLevel);
     formData.append("coursePrice", input.coursePrice);
-    formData.append("courseThumbnail", input.courseThumbnail);
-    await editCourse({ formData, courseId });
+
+    if (input.courseThumbnail) {
+      formData.append("courseThumbnail", input.courseThumbnail);
+    }
+
+    try {
+      await editCourse({
+        formData,
+        courseId: course._id,
+      }).unwrap();
+
+      toast.success("Course updated successfully");
+    } catch (err) {
+      toast.error(err?.data?.message || "Failed to update course");
+    }
   };
 
-  const publishStatusHandler = async (action) => {
+  // Publish / Unpublish course
+  const publishStatusHandler = async () => {
+    const action = course.isPublished ? "false" : "true";
+
     try {
       const response = await publishCourse({
-        courseId,
+        courseId: course._id,
         query: action,
       }).unwrap();
 
-      toast.success(response.message);
-    } catch (error) {
-      console.log(error);
-      toast.error("Failed To Publish and Unpublish Course");
+      toast.success(response?.message || "Course status updated successfully");
+    } catch (err) {
+      toast.error(err?.data?.message || "Failed to update course status");
     }
   };
 
+  // Success and error notifications
   useEffect(() => {
     if (isSuccess) {
-      toast.success(data?.message || "Course Updated Successfully");
+      toast.success(data?.message || "Course updated successfully");
     }
 
     if (error) {
-      toast.error(error?.data?.message || "Course Not Updated");
+      toast.error(error?.data?.message || "Course update failed");
     }
   }, [isSuccess, error, data]);
 
-  if (courseByIdLoading) return <PageLoader />;
-
   return (
-    <div className="relative min-h-screen overflow-hidden px-4 py-8 md:px-8">
-      {/* Background Glow */}
-      <div className="absolute left-0 top-10 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl" />
+    <div className="relative isolate w-full min-w-0">
+      {/* Background Glows */}
+      <div className="pointer-events-none absolute top-10 -left-8 -z-10 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl" />
 
-      <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-violet-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 -bottom-8 -z-10 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
 
-      {/* Main Container */}
-      <div className="relative mx-auto max-w-6xl">
-        <Card className="overflow-hidden rounded-3xl border border-white/10 bg-white/10 shadow-2xl backdrop-blur-2xl">
-          {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-violet-500/5" />
+      {/* Main Course Card */}
+      <Card className="relative isolate w-full min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/10 shadow-xl shadow-black/5 backdrop-blur-2xl sm:rounded-3xl">
+        {/* Card Gradient */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-violet-500/5" />
 
-          {/* Header */}
-          <CardHeader className="relative flex flex-col gap-6 border-b border-white/10 p-8 lg:flex-row lg:items-center lg:justify-between">
-            {/* Left */}
-            <div className="flex items-start gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/30">
-                <BookOpen className="text-white" size={30} />
-              </div>
-
-              <div>
-                <CardTitle className="text-3xl font-extrabold tracking-tight">
-                  Course Information
-                </CardTitle>
-
-                <CardDescription className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  Customize your course details, optimize learning experience,
-                  and make your course stand out beautifully on Cognito.
-                </CardDescription>
-              </div>
+        {/* Header */}
+        <CardHeader className="relative z-10 flex flex-col gap-5 border-b border-white/10 p-4 sm:p-6 lg:flex-row lg:items-center lg:justify-between lg:p-8">
+          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/20 sm:h-14 sm:w-14 sm:rounded-2xl">
+              <BookOpen className="h-5 w-5 text-white sm:h-6 sm:w-6" />
             </div>
 
-            {/* Right Buttons */}
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                disabled={courseByIdData?.course.lectures.length === 0}
-                onClick={() =>
-                  publishStatusHandler(
-                    courseByIdData?.course.isPublished ? "false" : "true",
-                  )
-                }
-                variant="outline"
-                className="rounded-2xl border-white/10 bg-white/5 px-6 backdrop-blur-xl hover:bg-white/10"
-              >
-                {courseByIdData?.course.isPublished ? "Unpublish" : "Publish"}
-              </Button>
+            <div className="min-w-0">
+              <CardTitle className="text-xl font-extrabold tracking-tight sm:text-2xl">
+                Course Information
+              </CardTitle>
 
-              <Button className="rounded-2xl bg-red-500/90 px-6 text-white hover:bg-red-600">
-                Remove Course
-              </Button>
+              <CardDescription className="text-muted-foreground mt-2 max-w-2xl text-xs leading-relaxed sm:text-sm">
+                Customize your course details, optimize the learning experience,
+                and make your course stand out on Cognito.
+              </CardDescription>
             </div>
-          </CardHeader>
+          </div>
 
-          {/* Content */}
-          <CardContent className="relative space-y-8 p-8">
-            {/* Title */}
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold">Course Title</Label>
+          {/* Actions */}
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:shrink-0">
+            <Button
+              disabled={isPublishing || (course.lectures?.length ?? 0) === 0}
+              onClick={publishStatusHandler}
+              variant="outline"
+              className="h-10 w-full rounded-xl border-white/10 bg-white/5 px-5 text-sm backdrop-blur-xl hover:bg-white/10 sm:w-auto sm:rounded-2xl"
+            >
+              {isPublishing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
 
-              <Input
-                type="text"
-                name="courseTitle"
-                placeholder="Ex. FullStack Developer"
-                value={input.courseTitle}
-                onChange={changeEventHandler}
-                className="h-12 rounded-2xl border-white/10 bg-white/5 backdrop-blur-xl focus-visible:ring-2 focus-visible:ring-indigo-500"
-              />
-            </div>
+              {course.isPublished ? "Unpublish" : "Publish"}
+            </Button>
 
-            {/* Subtitle */}
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold">Course Subtitle</Label>
+            <Button
+              type="button"
+              className="h-10 w-full rounded-xl border border-transparent bg-red-600 px-5 text-sm font-medium text-white shadow-sm hover:bg-red-700 sm:w-auto sm:rounded-2xl"
+              title="Course deletion is not connected yet"
+            >
+              Remove Course
+            </Button>
+          </div>
+        </CardHeader>
 
-              <Input
-                type="text"
-                name="subTitle"
-                value={input.subTitle}
-                onChange={changeEventHandler}
-                placeholder="Ex. Become a FullStack developer from zero to hero"
-                className="h-12 rounded-2xl border-white/10 bg-white/5 backdrop-blur-xl focus-visible:ring-2 focus-visible:ring-indigo-500"
-              />
-            </div>
+        {/* Form Content */}
+        <CardContent className="relative z-10 space-y-6 p-4 sm:space-y-8 sm:p-6 lg:p-8">
+          {/* Course Title */}
+          <div className="min-w-0 space-y-2.5">
+            <Label className="text-sm font-semibold">Course Title</Label>
 
-            {/* Description */}
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold">
-                Course Description
-              </Label>
+            <Input
+              type="text"
+              name="courseTitle"
+              value={input.courseTitle}
+              onChange={changeEventHandler}
+              placeholder="Ex. FullStack Developer"
+              className="h-11 rounded-xl border-white/10 bg-white/5 text-sm backdrop-blur-xl focus-visible:ring-2 focus-visible:ring-indigo-500 sm:h-12 sm:rounded-2xl sm:text-base"
+            />
+          </div>
 
+          {/* Course Subtitle */}
+          <div className="min-w-0 space-y-2.5">
+            <Label className="text-sm font-semibold">Course Subtitle</Label>
+
+            <Input
+              type="text"
+              name="subTitle"
+              value={input.subTitle}
+              onChange={changeEventHandler}
+              placeholder="Become a FullStack developer from zero to hero"
+              className="h-11 rounded-xl border-white/10 bg-white/5 text-sm backdrop-blur-xl focus-visible:ring-2 focus-visible:ring-indigo-500 sm:h-12 sm:rounded-2xl sm:text-base"
+            />
+          </div>
+
+          {/* Description */}
+          <div className="min-w-0 space-y-2.5">
+            <Label className="text-sm font-semibold">Course Description</Label>
+
+            <div className="w-full min-w-0">
               <RichTextEditor input={input} setInput={setInput} />
             </div>
+          </div>
 
-            {/* Grid */}
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {/* Category */}
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-sm font-semibold">
-                  <Layers3 className="h-4 w-4 text-indigo-400" />
-                  Category
-                </Label>
+          {/* Course Details Grid */}
+          <div className="grid min-w-0 grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2">
+            {/* Category */}
+            <div className="min-w-0 space-y-2.5">
+              <Label className="flex items-center gap-2 text-sm font-semibold">
+                <Layers3 className="h-4 w-4 shrink-0 text-indigo-400" />
+                Category
+              </Label>
 
-                <Select value={input.category} onValueChange={selectCategory}>
-                  <SelectTrigger className="h-12 rounded-2xl border-white/10 bg-white/5 backdrop-blur-xl focus:ring-2 focus:ring-indigo-500">
-                    <SelectValue placeholder="Choose a category" />
-                  </SelectTrigger>
+              <Select value={input.category} onValueChange={selectCategory}>
+                <SelectTrigger className="h-11 w-full rounded-xl border-white/10 bg-white/5 text-sm backdrop-blur-xl focus:ring-2 focus:ring-indigo-500 sm:h-12 sm:rounded-2xl sm:text-base">
+                  <SelectValue placeholder="Choose a category" />
+                </SelectTrigger>
 
-                  <SelectContent className="border-white/10 bg-background/95 backdrop-blur-2xl">
-                    <SelectGroup>
-                      <SelectLabel>Select Course Category</SelectLabel>
+                <SelectContent className="bg-background/95 border-white/10 backdrop-blur-2xl">
+                  <SelectGroup>
+                    <SelectLabel>Select Course Category</SelectLabel>
 
-                      <SelectItem value="nextjs">Next JS</SelectItem>
-
-                      <SelectItem value="datascience">Data Science</SelectItem>
-
-                      <SelectItem value="frontend">
-                        FrontEnd Development
-                      </SelectItem>
-
-                      <SelectItem value="fullstack">
-                        FullStack Development
-                      </SelectItem>
-
-                      <SelectItem value="mern">
-                        MERN Stack Development
-                      </SelectItem>
-
-                      <SelectItem value="javascript">JavaScript</SelectItem>
-
-                      <SelectItem value="python">Python</SelectItem>
-
-                      <SelectItem value="mongodb">Mongo DB</SelectItem>
-
-                      <SelectItem value="c">C</SelectItem>
-
-                      <SelectItem value="cpp">C++</SelectItem>
-
-                      <SelectItem value="java">Java</SelectItem>
-
-                      <SelectItem value="react">React JS</SelectItem>
-
-                      <SelectItem value="node">Node JS</SelectItem>
-
-                      <SelectItem value="typescript">TypeScript</SelectItem>
-
-                      <SelectItem value="html">HTML</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Course Level */}
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-sm font-semibold">
-                  <Sparkles className="h-4 w-4 text-violet-400" />
-                  Course Level
-                </Label>
-
-                <Select
-                  value={input.courseLevel}
-                  onValueChange={selectCourseLevel}
-                >
-                  <SelectTrigger className="h-12 rounded-2xl border-white/10 bg-white/5 backdrop-blur-xl focus:ring-2 focus:ring-indigo-500">
-                    <SelectValue placeholder="Select course level" />
-                  </SelectTrigger>
-
-                  <SelectContent className="border-white/10 bg-background/95 backdrop-blur-2xl">
-                    <SelectGroup>
-                      <SelectLabel>Select Course Level</SelectLabel>
-
-                      <SelectItem value="Beginner">Beginner</SelectItem>
-
-                      <SelectItem value="Intermediate">Intermediate</SelectItem>
-
-                      <SelectItem value="Advanced">Advanced</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Price */}
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-sm font-semibold">
-                  <IndianRupee className="h-4 w-4 text-green-400" />
-                  Price (INR)
-                </Label>
-
-                <Input
-                  type="number"
-                  name="coursePrice"
-                  value={input.coursePrice}
-                  onChange={changeEventHandler}
-                  placeholder="199"
-                  className="h-12 rounded-2xl border-white/10 bg-white/5 backdrop-blur-xl focus-visible:ring-2 focus-visible:ring-indigo-500"
-                />
-              </div>
-
-              {/* Thumbnail */}
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-sm font-semibold">
-                  <ImagePlus className="h-4 w-4 text-pink-400" />
-                  Course Thumbnail
-                </Label>
-
-                <Input
-                  onChange={selectThumbnail}
-                  type="file"
-                  accept="image/*"
-                  className="rounded-2xl border-white/10 bg-white/5 text-gray-500"
-                />
-                {previewThumbnail && (
-                  <img
-                    src={previewThumbnail}
-                    className="e-40 my-2"
-                    alt="Course Thumbnail"
-                  />
-                )}
-              </div>
+                    <SelectItem value="nextjs">Next JS</SelectItem>
+                    <SelectItem value="datascience">Data Science</SelectItem>
+                    <SelectItem value="frontend">
+                      FrontEnd Development
+                    </SelectItem>
+                    <SelectItem value="fullstack">
+                      FullStack Development
+                    </SelectItem>
+                    <SelectItem value="mern">MERN Stack Development</SelectItem>
+                    <SelectItem value="javascript">JavaScript</SelectItem>
+                    <SelectItem value="python">Python</SelectItem>
+                    <SelectItem value="mongodb">Mongo DB</SelectItem>
+                    <SelectItem value="c">C</SelectItem>
+                    <SelectItem value="cpp">C++</SelectItem>
+                    <SelectItem value="java">Java</SelectItem>
+                    <SelectItem value="react">React JS</SelectItem>
+                    <SelectItem value="node">Node JS</SelectItem>
+                    <SelectItem value="typescript">TypeScript</SelectItem>
+                    <SelectItem value="HTML">HTML</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Divider */}
-            <div className="h-px w-full bg-gradient-to-r from-transparent via-border to-transparent" />
+            {/* Course Level */}
+            <div className="min-w-0 space-y-2.5">
+              <Label className="flex items-center gap-2 text-sm font-semibold">
+                <Sparkles className="h-4 w-4 shrink-0 text-violet-400" />
+                Course Level
+              </Label>
 
-            {/* Footer Buttons */}
-            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <Button
-                variant="outline"
-                className="h-11 rounded-2xl border-white/10 bg-white/5 px-6 backdrop-blur-xl hover:bg-white/10"
-                onClick={() => navigate("/admin/course")}
+              <Select
+                value={input.courseLevel}
+                onValueChange={selectCourseLevel}
               >
-                Cancel
-              </Button>
+                <SelectTrigger className="h-11 w-full rounded-xl border-white/10 bg-white/5 text-sm backdrop-blur-xl focus:ring-2 focus:ring-indigo-500 sm:h-12 sm:rounded-2xl sm:text-base">
+                  <SelectValue placeholder="Select course level" />
+                </SelectTrigger>
 
-              <Button
-                disabled={isLoading}
-                onClick={updateInputHanlder}
-                className="h-11 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 px-8 font-semibold text-white transition-all duration-300 hover:from-indigo-600 hover:to-violet-600 hover:shadow-lg hover:shadow-indigo-500/30"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Please Wait...
-                  </>
-                ) : (
-                  "Save Changes"
-                )}
-              </Button>
+                <SelectContent className="bg-background/95 border-white/10 backdrop-blur-2xl">
+                  <SelectGroup>
+                    <SelectLabel>Select Course Level</SelectLabel>
+
+                    <SelectItem value="Beginner">Beginner</SelectItem>
+                    <SelectItem value="Intermediate">Intermediate</SelectItem>
+                    <SelectItem value="Advanced">Advanced</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+
+            {/* Price */}
+            <div className="min-w-0 space-y-2.5">
+              <Label className="flex items-center gap-2 text-sm font-semibold">
+                <IndianRupee className="h-4 w-4 shrink-0 text-green-400" />
+                Price (INR)
+              </Label>
+
+              <Input
+                type="number"
+                name="coursePrice"
+                value={input.coursePrice}
+                onChange={changeEventHandler}
+                placeholder="199"
+                min="0"
+                className="h-11 rounded-xl border-white/10 bg-white/5 text-sm backdrop-blur-xl focus-visible:ring-2 focus-visible:ring-indigo-500 sm:h-12 sm:rounded-2xl sm:text-base"
+              />
+            </div>
+
+            {/* Thumbnail */}
+            <div className="min-w-0 space-y-2.5">
+              <Label className="flex items-center gap-2 text-sm font-semibold">
+                <ImagePlus className="h-4 w-4 shrink-0 text-pink-400" />
+                Course Thumbnail
+              </Label>
+
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={selectThumbnail}
+                className="text-muted-foreground h-11 w-full rounded-xl border-white/10 bg-white/5 text-xs backdrop-blur-xl file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-500/10 file:px-2 file:py-1 file:text-xs file:font-medium file:text-indigo-400 sm:h-12 sm:rounded-2xl sm:text-sm"
+              />
+
+              {previewThumbnail && (
+                <img
+                  src={previewThumbnail}
+                  alt="Course thumbnail preview"
+                  className="mt-3 aspect-video w-full max-w-sm rounded-xl border border-white/10 object-cover sm:rounded-2xl"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="via-border h-px w-full bg-gradient-to-r from-transparent to-transparent" />
+
+          {/* Footer Actions */}
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate("/admin/course")}
+              className="h-11 w-full rounded-xl border-white/10 bg-white/5 px-6 text-sm backdrop-blur-xl hover:bg-white/10 sm:w-auto sm:rounded-2xl"
+            >
+              Cancel
+            </Button>
+
+            <Button
+              type="button"
+              disabled={isLoading}
+              onClick={updateInputHandler}
+              className="h-11 w-full rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-8 text-sm font-semibold text-white transition-all duration-300 hover:from-indigo-600 hover:to-violet-600 hover:shadow-lg hover:shadow-indigo-500/30 sm:w-auto sm:rounded-2xl"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving Changes...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

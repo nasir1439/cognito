@@ -4,10 +4,14 @@ const COURSE_PURCHASE_API = `${import.meta.env.VITE_API_BASE_URL}/purchase`;
 
 export const purchaseApi = createApi({
   reducerPath: "purchaseApi",
+
   baseQuery: fetchBaseQuery({
     baseUrl: COURSE_PURCHASE_API,
     credentials: "include",
   }),
+
+  tagTypes: ["CoursePurchaseStatus"],
+
   endpoints: (builder) => ({
     createCheckoutSession: builder.mutation({
       query: (courseId) => ({
@@ -16,15 +20,21 @@ export const purchaseApi = createApi({
         body: { courseId },
       }),
     }),
+
     getCourseDetailWithStatus: builder.query({
       query: (courseId) => ({
         url: `/course/${courseId}/detail-with-status`,
         method: "GET",
       }),
+
+      providesTags: (result, error, courseId) => [
+        { type: "CoursePurchaseStatus", id: courseId },
+      ],
     }),
+
     getPurchasedCourses: builder.query({
       query: () => ({
-        url: `/`,
+        url: "/",
         method: "GET",
       }),
     }),
